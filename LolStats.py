@@ -43,7 +43,10 @@ try:
 
     # Extract champion ID
     champions = watcher.data_dragon.champions(patch)
-    champID = champions["data"][champion]["key"]
+    if champion == None:
+        champID = None
+    else:
+        champID = champions["data"][champion]["key"]
 
     # Get matches for certain game type and champion
     # API only allows 100 matches at a time but my loop accounts for that
