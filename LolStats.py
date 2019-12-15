@@ -1,16 +1,6 @@
 from riotwatcher import RiotWatcher, ApiError
 import json
-
-# The values before the region table are for you to modify
-gameType = 450  # 450 is Aram, 440 is Flex, 430 is Norms, 420 is Solo/Duo Ranked
-apiKey = ""
-my_region = "euw1"
-username = ""
-# If you make champion = None, this will find all champions in a gametype
-champion = ""
-
-# Current patch can be found here: https://ddragon.leagueoflegends.com/realms/na.json
-patch = "9.23.1"
+import time
 
 # Table of region id's for each region
 # br1	br1.api.riotgames.com
@@ -24,143 +14,157 @@ patch = "9.23.1"
 # oc1	oc1.api.riotgames.com
 # tr1	tr1.api.riotgames.com
 # ru	ru.api.riotgames.com
+my_region = "na1"
 
-wins = 0
-losses = 0
-timeSpent = 0
-lastPatch = ""
+# Get API key here: https://developer.riotgames.com/
+apiKey = " "
+patch = "9.24.1"
+
+# List of queue types found here: http://static.developer.riotgames.com/docs/lol/queues.json
+gameType = 450  # 450 is Aram, 440 is Ranked Flex, 430 is Norms, 420 is Solo/Duo Ranked, 0 is Customs
+
+# Table of champions for each username to find stats on, None finds all games in gametype regardless of champion
+table = {
+    "username1": ["Gangplank", "Illaoi"],
+    "username2": ["Katarina", "Illaoi"],
+    "username3": [None],
+}
+
+# All values above this line can be modified
 
 try:
     # Get summoner account information, you can uncomment the prints to view that information
     watcher = RiotWatcher(apiKey)
-    # print("Summoner-v4        Row 8-2")
-    myAccount = watcher.summoner.by_name(my_region, username)
-    # print(json.dumps(myAccount, indent=4, sort_keys=True))
-    # print("\n")
+    championList = watcher.data_dragon.champions(patch)
+    statsList = []
 
-    accountID = myAccount["accountId"]
-    globalID = myAccount["puuid"]
+    for user, champions in table.items():
 
-    # Extract champion ID
-    champions = watcher.data_dragon.champions(patch)
-    if champion == None:
-        champID = None
-    else:
-        champID = champions["data"][champion]["key"]
+        # Extract summoner ID
+        summoner = watcher.summoner.by_name(my_region, user)
+        print(json.dumps(summoner, indent=4, sort_keys=True))
+        accountID = summoner["accountId"]
+        globalID = summoner["puuid"]
 
-    # Get matches for certain game type and champion
-    # API only allows 100 matches at a time but my loop accounts for that
-    matches = watcher.match.matchlist_by_account(
-        my_region,
-        accountID,
-        gameType,
-        begin_time=None,
-        end_time=None,
-        begin_index=None,
-        end_index=None,
-        season=None,
-        champion=champID,
-    )
+        for champ in champions:
 
-    totalGames = matches["totalGames"]
-    matchCount = 0
-    loopCount = 0  # Everytime loopCount increments, that means we viewed 100 matches and will now look for the next 100
+            print("IGN: " + str(user) + "\n")
+            print("Champion: " + "**" + str(champ) + "**" + "\n")
 
-    print("Total Games: " + str(totalGames) + "\n")
+            # Extract champion ID
+            if champ:
+                champID = championList["data"][champ]["key"]
+            else:
+                champID = None
 
-    while matchCount < totalGames:
-        print("Match Count:", (loopCount * 100) + matchCount + 1)
-
-        gameID = matches["matches"][matchCount]["gameId"]
-        match = watcher.match.by_id(my_region, gameID)
-        timeSpent += match["gameDuration"]
-
-        # Game ID to debug certain matches
-        # print("GAME", gameID)
-
-        myID = 100
-        found = False
-        for player in match["participantIdentities"]:
-            currentID = player["player"]["currentAccountId"]
-            if accountID in currentID:
-                myID = player["participantId"]
-                found = True
-
-        # Caused by region transfer, this will not increment loop and will restart searching from current index
-        if not found:
-            newAccount = watcher.summoner.by_puuid(my_region, globalID)
-            accountID = newAccount["accountId"]
-            print(
-                "REGION TRANSFER OCCURRED: \n IF YOU SEE THIS MESSAGE MORE TIMES THAN THE TIMES YOU TRANSFERRED \n THEN MATCHES AFTER THIS MIGHT BE INACCURATE"
+            # Get matches for certain game type and champion
+            # API only allows 100 matches at a time but my loop accounts for that
+            matches = watcher.match.matchlist_by_account(
+                my_region,
+                accountID,
+                gameType,
+                begin_time=None,
+                end_time=None,
+                begin_index=None,
+                end_index=None,
+                season=None,
+                champion=champID,
             )
 
-        else:
-            print("Patch: " + match["gameVersion"])
+            lastPatch = ""
+            win = 0
+            loss = 0
+            timeSpent = 0
+            totalGames = 0
 
-            if totalGames - matchCount == 1:
-                lastPatch = match["gameVersion"]
+            matchCount = 0
+            loopCount = 0  # Everytime loopCount increments, that means we viewed 100 matches and will now look for the next 100
 
-            if match["teams"][0]["win"] == "Win":
-                if 1 <= myID <= 5:
-                    wins += 1
-                    print("Win")
-                if 5 < myID <= 10:
-                    losses += 1
-                    print("Loss")
+            while matchCount < len(matches["matches"]):
 
-            if match["teams"][0]["win"] == "Fail":
-                if 1 <= myID <= 5:
-                    losses += 1
-                    print("Loss")
-                if 5 < myID <= 10:
-                    wins += 1
-                    print("Win")
+                # Retreive game ID for specific match
+                gameID = matches["matches"][matchCount]["gameId"]
+                # print(gameID)
+                match = watcher.match.by_id(my_region, gameID)
 
-            # If for whatever reason I still can't find you in a game
-            # This breaks the code so it doesn't display incorrect information
-            if myID == 100:
-                print("ERROR SUMMONER NOT FOUND")
-                break
+                # Find player in match, currentAccountId should track player even if they name changed or region transferred
+                found = False
+                for player in match["participantIdentities"]:
+                    if accountID in player["player"]["currentAccountId"]:
+                        playerID = player["participantId"]
+                        found = True
 
-            # Once matchCount is about to hit 100 if possible, this will reset the counters so the indexs stay inbound and then searches next 100 games
-            if matchCount == 99:
-                matchCount = 0
-                totalGames -= 100
-                loopCount += 1
-                matches = watcher.match.matchlist_by_account(
-                    my_region,
-                    accountID,
-                    gameType,
-                    begin_time=None,
-                    end_time=None,
-                    begin_index=loopCount * 100,
-                    end_index=None,
-                    season=None,
-                    champion=champID,
+                if not found:
+                    print(
+                        "Summoner wasn't found for match "
+                        + str(matchCount)
+                        + " with champ: "
+                        + str(champ)
+                        + "\nCould be an API issue or account problem"
+                    )
+                    break
+
+                print("Match Count:", (loopCount * 100) + matchCount + 1)
+                print("Patch: " + match["gameVersion"])
+
+                # Search if player won or not
+                for participant in match["participants"]:
+                    if participant["participantId"] == playerID:
+                        if participant["stats"]["win"]:
+                            win += 1
+                            print("Win" + "\n")
+                        else:
+                            loss += 1
+                            print("Loss" + "\n")
+
+                if matchCount == len(matches["matches"]) - 1:
+                    lastPatch = match["gameVersion"]
+                timeSpent += match["gameDuration"]
+                totalGames += 1
+
+                # Once matchCount is about to hit 100 if possible, this will reset the counters so the indexs stay inbound and then searches next 100 games
+                if matchCount == 99:
+                    matchCount = 0
+                    loopCount += 1
+                    matches = watcher.match.matchlist_by_account(
+                        my_region,
+                        accountID,
+                        gameType,
+                        begin_time=None,
+                        end_time=None,
+                        begin_index=loopCount * 100,
+                        end_index=None,
+                        season=None,
+                        champion=champID,
+                    )
+
+                else:
+                    matchCount += 1
+
+            # Storing printed values and other stats to dump all stats for each player and their champions at the end
+            # This avoids losing stats with limited terminal history
+            statsList.append("IGN: " + str(user))
+            statsList.append("Champion: " + "**" + str(champ) + "**")
+            statsList.append("Total Games: " + str(totalGames))
+            statsList.append("Wins: " + str(win))
+            statsList.append("Losses: " + str(loss))
+            if win + loss != 0:
+                statsList.append(
+                    "Win Rate: " + str(round((win * 100 / (win + loss)), 2)) + "%"
                 )
-
             else:
-                matchCount += 1
+                statsList.append("No Win Rate Data\n")
 
-            # Just to space values out
-            print()
+            statsList.append(
+                time.strftime(
+                    "Time Spent On Champion: %H Hours, %M Minutes, %S Seconds",
+                    time.gmtime(timeSpent),
+                )
+            )
+            statsList.append("Oldest Patch: " + lastPatch)
 
-    print("IGN: " + username + "\n")
-    print("Champion: " + "**" + champion + "**" + "\n")
-    print("Total Games: " + str((loopCount * 100) + totalGames) + "\n")
-    print("Wins: " + str(wins) + "\n")
-    print("Losses: " + str(losses) + "\n")
-    # Avoids dividing by 0
-    if wins + losses != 0:
-        print(
-            "Win Rate: " + "{:.2f}".format((wins * 100 / (wins + losses))) + "%" + "\n"
-        )
-    else:
-        print("No Win Rate Data")
-    print(
-        "Hours Spent With Champion In Game: " + "{:.2f}".format(timeSpent / 3600) + "\n"
-    )
-    print("Oldest Patch: " + lastPatch + "\n")
+    for stat in statsList:
+        print(stat + "\n")
 
 except ApiError as err:
     if err.response.status_code == 429:
@@ -173,4 +177,3 @@ except ApiError as err:
         print("Data not found")
     else:
         raise
-
