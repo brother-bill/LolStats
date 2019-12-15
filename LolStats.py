@@ -153,13 +153,10 @@ try:
                     "Win Rate: " + str(round((win * 100 / (win + loss)), 2)) + "%"
                 )
             else:
-                statsList.append("No Win Rate Data\n")
+                statsList.append("No Win Rate Data")
 
             statsList.append(
-                time.strftime(
-                    "Time Spent On Champion: %H Hours, %M Minutes, %S Seconds",
-                    time.gmtime(timeSpent),
-                )
+                "Hours Spent In Game: " + "{:.2f}".format(timeSpent / 3600)
             )
             statsList.append("Oldest Patch: " + lastPatch)
 
