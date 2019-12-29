@@ -1,7 +1,18 @@
 from riotwatcher import RiotWatcher, ApiError
-import json
-import time
+import json, requests
 
+# The values before the region table are for you to modify
+apiKey = "Put API Key Here"  # Get API key here: https://developer.riotgames.com/
+
+# List of queue types found here: http://static.developer.riotgames.com/docs/lol/queues.json
+gameType = 450  # 450 is Aram, 440 is Ranked Flex, 430 is Norms, 420 is Solo/Duo Ranked, 0 is Customs
+
+# Table of champions for each username to find stats on, None finds all games in gametype regardless of champion
+table = {
+    "TheSwag VT": ["Aphelios", "Olaf"],
+}
+
+my_region = "na1"
 # Table of region id's for each region
 # br1	br1.api.riotgames.com
 # eun1	eun1.api.riotgames.com
@@ -14,23 +25,12 @@ import time
 # oc1	oc1.api.riotgames.com
 # tr1	tr1.api.riotgames.com
 # ru	ru.api.riotgames.com
-my_region = "na1"
 
-# Get API key here: https://developer.riotgames.com/
-apiKey = " "
-patch = "9.24.1"
-
-# List of queue types found here: http://static.developer.riotgames.com/docs/lol/queues.json
-gameType = 450  # 450 is Aram, 440 is Ranked Flex, 430 is Norms, 420 is Solo/Duo Ranked, 0 is Customs
-
-# Table of champions for each username to find stats on, None finds all games in gametype regardless of champion
-table = {
-    "username1": ["Gangplank", "Illaoi"],
-    "username2": ["Katarina", "Illaoi"],
-    "username3": [None],
-}
-
-# All values above this line can be modified
+# Current patch can be found here: https://ddragon.leagueoflegends.com/realms/na.json
+response = json.loads(
+    requests.get("https://ddragon.leagueoflegends.com/realms/na.json").text
+)
+patch = response["v"]
 
 try:
     # Get summoner account information, you can uncomment the prints to view that information
@@ -42,7 +42,9 @@ try:
 
         # Extract summoner ID
         summoner = watcher.summoner.by_name(my_region, user)
-        print(json.dumps(summoner, indent=4, sort_keys=True))
+
+        # Prints summoner IDs and account information if wanted
+        # print(json.dumps(summoner, indent=4, sort_keys=True))
         accountID = summoner["accountId"]
         globalID = summoner["puuid"]
 
@@ -57,20 +59,28 @@ try:
             else:
                 champID = None
 
-            # Get matches for certain game type and champion
-            # API only allows 100 matches at a time but my loop accounts for that
-            matches = watcher.match.matchlist_by_account(
-                my_region,
-                accountID,
-                gameType,
-                begin_time=None,
-                end_time=None,
-                begin_index=None,
-                end_index=None,
-                season=None,
-                champion=champID,
-            )
+            matches = None
+            try:
+                # Get matches for certain game type and champion
+                # API only allows 100 matches at a time but my loop accounts for that
+                matches = watcher.match.matchlist_by_account(
+                    my_region,
+                    accountID,
+                    gameType,
+                    begin_time=None,
+                    end_time=None,
+                    begin_index=None,
+                    end_index=None,
+                    season=None,
+                    champion=champID,
+                )
+            except ApiError as err:
+                print("Data not found")
 
+            # Riot API acknowledged that total games field in their json is inaccurate but is a good estimate for smaller values
+            if matches is not None:
+                supposedGames = matches["totalGames"]
+                print("Supposed Total Games: ", supposedGames)
             lastPatch = ""
             win = 0
             loss = 0
@@ -80,11 +90,12 @@ try:
             matchCount = 0
             loopCount = 0  # Everytime loopCount increments, that means we viewed 100 matches and will now look for the next 100
 
-            while matchCount < len(matches["matches"]):
+            # If no matches were found for a champion on a user, then go to next index
+            while matches and matchCount < len(matches["matches"]):
 
                 # Retreive game ID for specific match
                 gameID = matches["matches"][matchCount]["gameId"]
-                # print(gameID)
+                # print("GAME ID", gameID)
                 match = watcher.match.by_id(my_region, gameID)
 
                 # Find player in match, currentAccountId should track player even if they name changed or region transferred
@@ -162,7 +173,6 @@ try:
 
     for stat in statsList:
         print(stat + "\n")
-
 except ApiError as err:
     if err.response.status_code == 429:
         print(
