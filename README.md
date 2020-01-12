@@ -20,8 +20,8 @@ Search Options Include:
 
 # FlameBot
 
-Once you enter your username and API key into FlameBot, it will automatically search the stats of all the players in your live game. 
-This helps tell you who is more experienced piloting their specific character in the game mode of your choosing. 
+Once you enter your username and API key into FlameBot, it will automatically pull statistics of all the players in your live game. 
+This tells you who is more experienced playing their specific character.
 
 In version 2 of FlameBot, you can even output the statistics for everyone in your game to see.
 
