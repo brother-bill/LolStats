@@ -1,5 +1,5 @@
 # LolStats
-<img src="https://github.com/TahaBilalCS/ReflexIO/blob/master/app/demo/reflexIO.gif" width="600" height="498" />
+<img src="https://github.com/TahaBilalCS/LolStats/blob/master/demo/LolStatsDemo.gif"/>
 
 LolStats is a Python program that uses the RIOT API for League of Legends to gather the statistics of any player in the game. The API only has
 data from 2 years ago but that is sufficient for the average player. Using a player's global ID, you can also track their game history regardless of if they changed names or regions in the past.
